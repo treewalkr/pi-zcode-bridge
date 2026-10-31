@@ -1,0 +1,35 @@
+{
+  "name": "pi-zcode-bridge",
+  "version": "0.1.0",
+  "description": "Use the ZCode Desktop app-server as a pi model provider — Start Plan (free tier) GLM-5.3-Flash only, provider name zcode.",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "zcode",
+    "z.ai",
+    "glm",
+    "start-plan"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "files": [
+    "extensions",
+    "scripts",
+    "README.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ]
+  }
+}
