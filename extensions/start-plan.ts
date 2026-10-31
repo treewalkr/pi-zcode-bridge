@@ -169,7 +169,10 @@ export interface StartPlanOptions {
 
 interface Prepared {
   providerId: string;
+  /** Lowercased entitled model ids (auth matching). */
   modelIds: string[];
+  /** Entitled model ids in catalog casing (registry materialization). */
+  casedModelIds: string[];
   tokenHash: string;
   expiresAtMs: number;
 }
@@ -194,8 +197,15 @@ export class StartPlan {
   /**
    * Validate the grant and produce the account config pushed to the
    * app-server before the turn (provider/updateAccountConfig).
+   * `catalogModelIds` are the provider's listable model ids in catalog
+   * casing; the grant's lowercase ids only gate which of them are entitled.
    */
-  async prepare(providerId: string, modelId: string, signal?: AbortSignal): Promise<{
+  async prepare(
+    providerId: string,
+    modelId: string,
+    catalogModelIds: string[],
+    signal?: AbortSignal,
+  ): Promise<{
     revision: string;
     basedOnZCodeBuiltinRevision: string;
     providers: Record<string, unknown>;
@@ -211,16 +221,22 @@ export class StartPlan {
         `Your Start Plan package does not include ${modelId}. Choose an included Start Plan model; no other plan was used.`,
       );
     }
-    this.requireUnchanged(generation, providerId, login);
+    this.requireUnchanged(generation, login);
+    // Entitled models in catalog casing; the app-server matches setModel refs
+    // against this list case-sensitively.
+    const entitled = catalogModelIds.filter((id) => grant.modelIds.has(id.toLowerCase()));
     const bundled = readJson<{ revision?: number }>(this.options.catalogPath);
-    const revision = `pi-zcode-bridge:${sha(JSON.stringify([providerId, [...grant.modelIds].sort(), grant.expiresAtMs]))}`;
     const providers = {
-      [providerId]: { access: { type: "zhipu-account", entitled: true }, builtinModelIds: [...grant.modelIds] },
+      [providerId]: { access: { type: "zhipu-account", entitled: true }, builtinModelIds: entitled },
     };
     const states = { [providerId]: { availability: "available", entitled: true, current: true } };
+    const revision = `pi-zcode-bridge:${sha(
+      JSON.stringify([providers, states, grant.expiresAtMs]),
+    )}`;
     this.prepared = {
       providerId,
-      modelIds: [...grant.modelIds],
+      modelIds: entitled.map((id) => id.toLowerCase()),
+      casedModelIds: entitled,
       tokenHash: sha(login.token),
       expiresAtMs: grant.expiresAtMs,
     };
@@ -264,8 +280,12 @@ export class StartPlan {
     }
     signal?.throwIfAborted();
     if ((this.options.now ?? Date.now)() >= prepared.expiresAtMs) {
-      const renewed = await this.prepare(prepared.providerId, params.modelSelection.modelId, signal);
-      void renewed; // prepare refreshed this.prepared
+      await this.prepare(
+        prepared.providerId,
+        params.modelSelection.modelId,
+        prepared.casedModelIds,
+        signal,
+      );
     }
     const login = this.requireLoginFor(prepared.providerId);
     if (sha(login.token) !== this.prepared?.tokenHash) {
@@ -296,7 +316,7 @@ export class StartPlan {
     return login;
   }
 
-  private requireUnchanged(generation: number, providerId: string, login: StartPlanLogin): void {
+  private requireUnchanged(generation: number, login: StartPlanLogin): void {
     const latest = this.login();
     if (generation !== this.generation) {
       throw new Error("Start Plan authorization was cancelled or superseded.");
@@ -304,7 +324,6 @@ export class StartPlan {
     if (!latest || latest.family !== login.family || latest.token !== login.token) {
       throw new Error("ZCode login changed while checking Start Plan. Retry the request.");
     }
-    void providerId;
   }
 
   private async fetchGrant(login: StartPlanLogin, signal?: AbortSignal): Promise<StartPlanGrant> {

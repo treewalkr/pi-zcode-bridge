@@ -179,6 +179,8 @@ export default function register(pi: ExtensionAPI) {
     server,
     startPlan,
     resolveModel: catalogById,
+    modelsForProvider: (providerId) =>
+      catalog.filter((model) => model.providerId === providerId).map((model) => model.modelId),
     piSessionId: () => piSessionId,
     rememberSession: (zcodeSessionId, workspacePath) =>
       rememberSession(piSessionId, zcodeSessionId, workspacePath),

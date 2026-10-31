@@ -129,6 +129,8 @@ export interface TurnEngineDeps {
   startPlan: StartPlan;
   /** Look up the bridge model for a pi model id. */
   resolveModel: (id: string) => BridgeModel | undefined;
+  /** Catalog model ids (catalog casing) for a ZCode provider id. */
+  modelsForProvider: (providerId: string) => string[];
   /** pi session UUID for the continuity sidecar (null outside a session). */
   piSessionId: () => string | null;
   /** Remember/resume zcode session ids per pi session. */
@@ -463,7 +465,12 @@ export class TurnEngine {
         if (!bridgeModel) throw new Error(`unknown zcode model: ${model.id}`);
         const ref = { providerId: bridgeModel.providerId, modelId: bridgeModel.modelId };
         if (bridgeModel.plan === "start-plan") {
-          const accountConfig = await this.deps.startPlan.prepare(ref.providerId, ref.modelId, authSignal);
+          const accountConfig = await this.deps.startPlan.prepare(
+            ref.providerId,
+            ref.modelId,
+            this.deps.modelsForProvider(ref.providerId),
+            authSignal,
+          );
           authSignal.throwIfAborted();
           await this.deps.server.request("provider/updateAccountConfig", accountConfig);
         }
